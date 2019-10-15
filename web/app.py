@@ -98,6 +98,7 @@ def ecoli_data():
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+application = app.server  # Entry Point for AWS Elastic Beanstalk
 DATA = ecoli_data()
 
 
