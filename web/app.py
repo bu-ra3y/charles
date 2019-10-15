@@ -1,24 +1,27 @@
+from datetime import datetime, time
+from pathlib import Path
+
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import pandas as pd
-from datetime import time, datetime
-
-from dash.dependencies import Output, Input
+from dash.dependencies import Input, Output
 from plotly import graph_objects as go
-from plotly.graph_objs.layout import legend
+
+folder = Path(__file__).parent.parent / "test_data"
+SITES_FILE = folder / 'Monitoring_Sites.csv'
+RESULTS_FILE = folder / 'Results.csv'
+METHODS_FILE = folder / 'Analytical_Methods.csv'
 
 
 def load_sites():
-    sites_file = '/Users/will/PycharmProjects/charles/test_data/Monitoring_Sites.csv'
-    sites = pd.read_csv(sites_file)
+    sites = pd.read_csv(SITES_FILE)
     # sites[['Site_Name', 'Town', 'Latitude_DD', 'Longitude_DD', 'Site_Description']]
     return sites
 
 
 def load_results(sites):
-    results_file = '/Users/will/PycharmProjects/charles/test_data/Results.csv'
-    r = pd.read_csv(results_file, low_memory=False)
+    r = pd.read_csv(RESULTS_FILE, low_memory=False)
 
     # Accepted results only
     r = r[r['QAQC_Status'].str.lower().str.contains('accepted', na=False)]
@@ -61,8 +64,7 @@ def load_results(sites):
 
 
 def load_methods():
-    methods_file = '/Users/will/PycharmProjects/charles/test_data/Analytical_Methods.csv'
-    m = pd.read_csv(methods_file)
+    m = pd.read_csv(METHODS_FILE)
     return m
 
 
@@ -97,6 +99,8 @@ def ecoli_data():
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 DATA = ecoli_data()
+
+
 # print(DATA)
 # print(DATA.columns)
 
@@ -109,7 +113,7 @@ def get_parameters():
     methods = load_methods()
     parameters = [p for p in methods.Parameter.unique() if isinstance(p, str)]
     parameters = sorted(parameters)
-    print(parameters)
+    # print(parameters)
     return parameters
 
 
@@ -137,6 +141,7 @@ app.layout = html.Div(children=[
     dcc.Graph(id='chart'),
 ])
 
+
 @app.callback(
     Output('chart', 'figure'),
     [Input('map', 'clickData'),
@@ -149,8 +154,8 @@ def update_chart(selected_site, date_string):
     name = selected_site.get('points')[0].get('text')
     data = DATA[DATA['Site_Name'] == name]
     date = string_date_to_date(date_string)
-    print(data)
-    print(data.columns)
+    # print(data)
+    # print(data.columns)
     return go.Figure(
         data=[
             go.Scatter(
@@ -179,6 +184,7 @@ def update_chart(selected_site, date_string):
         ),
     )
 
+
 def string_date_to_date(date_string):
     return datetime.strptime(date_string, '%Y-%m-%d').date()
 
@@ -187,7 +193,7 @@ def string_date_to_date(date_string):
     Output('map', 'figure'),
     [Input('date', 'value'),
      Input('parameter', 'value'),
-     ],)
+     ], )
 def update_map(date, parameter):
     mapbox_access_token = None
 
@@ -213,7 +219,7 @@ def update_map(date, parameter):
     fig.update_layout(
         hovermode='closest',
         title="Sites",
-        margin={"r":0,"t":0,"l":0,"b":0},
+        margin={"r": 0, "t": 0, "l": 0, "b": 0},
         mapbox=go.layout.Mapbox(
             accesstoken=mapbox_access_token,
             style="carto-positron",
@@ -227,7 +233,6 @@ def update_map(date, parameter):
     )
 
     return fig
-
 
 
 if __name__ == '__main__':
