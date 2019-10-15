@@ -209,4 +209,3 @@ YSI 63-Temp,YSI 63,Temperature,170.1,USEPA,Temperature,QAPP 2007-2009 Revision 2
 YSI 650-Depth-2015,YSI 650,Depth,,,,,NC,NA,NA,NA,NA,None required,None required,,Analyze immediately,,,,"RW, SW"
 YSI 650-DO-2015,YSI 650,Dissolved Oxygen,,,,,NC,NA,NA,NA,NA,None required,None required,,Analyze immediately,0,0.01 mg/l,<5.0 mg/l (a-1),"RW, SW"
 YSI 650-PCY-2015,YSI 650,Phycocyanin cell count,,,,,C,NA,NA,NA,NA,None required,None required,,Analyze immediately,0 cells/mL,1 cell/mL,"70,000 cells/ml (m-4), (a-8)","RW, SW"
-YSI 650-PCYRFU-2015,YSI 650,Phycocyanin relative fluorescence units,,,,,NC,NA,NA,NA,NA,None required,None required,,Analyze immediately,,,,"RW, 
