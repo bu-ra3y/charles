@@ -6,7 +6,7 @@ import dash_core_components as dcc
 import dash_html_components as html
 import pandas as pd
 from dash.dependencies import Input, Output
-from plotly import graph_objects as go
+import plotly.graph_objs as go
 
 folder = Path(__file__).parent.parent / "test_data"
 SITES_FILE = folder / 'Monitoring_Sites.csv'
@@ -50,8 +50,13 @@ def load_results(sites):
     columns = ['Site_ID', 'Date_Collected', 'datetime', 'Reporting_Result', 'Analytical_Method_ID', 'Site_Name', 'Town', 'Latitude_DD', 'Longitude_DD', ]
     r = r.merge(right=sites, how='left', on='Site_ID')[columns]
 
+    # Join with Analytical Methods to get Parameter name
+    methods = load_methods()
+    columns = ['Site_ID', 'Date_Collected', 'datetime', 'Parameter', 'Reporting_Result', 'Analytical_Method_ID', 'Site_Name', 'Town', 'Latitude_DD', 'Longitude_DD', ]
+    r = r.merge(right=methods, how='left', on='Analytical_Method_ID')[columns]
+
     # Drop results with missing DATA in one of the required columns
-    r = r.dropna(subset=['Latitude_DD', 'Longitude_DD', 'Reporting_Result', 'Date_Collected', 'datetime', 'Site_ID', 'Analytical_Method_ID'])
+    r = r.dropna(subset=['Latitude_DD', 'Longitude_DD', 'Parameter', 'Reporting_Result', 'Date_Collected', 'datetime', 'Site_ID', 'Analytical_Method_ID'])
 
     # TODO: limit to the 37 fixed sites
     # sites[sites['Site_ID'].isin(r['Site_ID'].unique())]
@@ -68,19 +73,8 @@ def load_methods():
     return m
 
 
-def ecoli_methods(methods):
-    e_m = methods[methods['Parameter'] == 'Escherichia coli']
-    e_m = e_m['Analytical_Method_ID']
-    return e_m
-
-
-def ecoli_data():
-    r = load_results(load_sites())
-    e_m = ecoli_methods(load_methods())
-    ecoli = r[r['Analytical_Method_ID'].isin(e_m)].copy()
-
-    # Drop unneeded method column
-    ecoli = ecoli.drop(['Analytical_Method_ID'], 1)
+def ecoli_data(data):
+    ecoli = data[data['Parameter'] == 'Escherichia coli'].copy()
 
     # Categorize Values into Severity Levels, thresholds are 126 and 630
     levels = ['Swimming', 'Boating', 'Danger']
@@ -99,7 +93,7 @@ def ecoli_data():
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 application = app.server  # Entry Point for AWS Elastic Beanstalk
-DATA = ecoli_data()
+DATA = load_results(load_sites())
 
 
 # print(DATA)
@@ -111,78 +105,109 @@ def get_dates(data):
 
 
 def get_parameters():
-    methods = load_methods()
-    parameters = [p for p in methods.Parameter.unique() if isinstance(p, str)]
+    parameters = [p for p in DATA.Parameter.unique() if isinstance(p, str)]
     parameters = sorted(parameters)
     # print(parameters)
     return parameters
 
 
 app.layout = html.Div(children=[
-    html.H1(children='E. coli Levels'),
     html.Div([
         dcc.Dropdown(
             id='parameter',
             options=[{'label': i, 'value': i} for i in get_parameters()],
             value='Escherichia coli',
+            disabled=True,
             placeholder='Choose a parameter',
             className="five columns",
         ),
         dcc.Dropdown(
             id='date',
-            options=[{'label': i, 'value': i} for i in get_dates(DATA)],
-            value=get_dates(DATA)[0],
+            options=[{'label': i, 'value': i} for i in get_dates(ecoli_data(DATA))],
+            value=get_dates(ecoli_data(DATA))[0],
             placeholder='Choose a date',
             className="three columns",
         ),
     ],
         className='row'
     ),
-    dcc.Graph(id='map'),
+    dcc.Graph(id='map', className='row'),
+    html.H1('Select a Site', id='site-name', className='row'),
+    html.Div(
+        dcc.Dropdown(
+            id='chart-parameters',
+            options=[{'label': i, 'value': i} for i in get_parameters()],
+            value=get_parameters(),
+            multi=True,
+            placeholder='Choose parameters to chart',
+            clearable=False,
+            className="twelve columns",
+        ),
+        className='row'),
     dcc.Graph(id='chart'),
 ])
+
+
+def site_name_from_map_click(selected_site):
+    return selected_site.get('points')[0].get('text')
+
+
+@app.callback(
+    Output('site-name', 'children'),
+    [Input('map', 'clickData')]
+)
+def update_site_name(map_click):
+    if not map_click:
+        return 'Select a site'
+    else:
+        return site_name_from_map_click(map_click)
 
 
 @app.callback(
     Output('chart', 'figure'),
     [Input('map', 'clickData'),
-     Input('date', 'value')]
+     Input('date', 'value'),
+     Input('chart-parameters', 'value'), ]
 )
-def update_chart(selected_site, date_string):
-    if not selected_site:
-        return go.Figure()
+def update_chart(map_click, date_string, parameters):
+    if not map_click or not parameters:
+        return go.Figure(layout=chart_layout())
+    else:
+        name = site_name_from_map_click(map_click)
+        data = DATA[DATA['Site_Name'] == name]  # Filter to the selected Site
 
-    name = selected_site.get('points')[0].get('text')
-    data = DATA[DATA['Site_Name'] == name]
     date = string_date_to_date(date_string)
     # print(data)
     # print(data.columns)
-    return go.Figure(
-        data=[
-            go.Scatter(
-                x=(date, date),
-                y=(0, 20000),
-                name=date_string,
-                mode='lines',
-                # text=data.Site_Name if not data.empty else list(),
-                # hoverinfo='text',
-                showlegend=False,
-            ),
-            go.Scatter(
-                x=data.datetime,
-                y=data.Reporting_Result,
-                name='Escherichia coli',
-                line_color='grey',
-                # text=data.Site_Name if not data.empty else list(),
-                # hoverinfo='text',
-            ),
-        ],
-        layout=go.Layout(
-            title=name,
-            yaxis=dict(
-                range=[0, 20000],
-            ),
+
+    date_line = go.Scatter(
+        x=(date, date),
+        y=(0, 20000),
+        name=date_string,
+        mode='lines',
+        # text=data.Site_Name if not data.empty else list(),
+        # hoverinfo='text',
+        showlegend=False,
+    )
+    traces = [go.Scatter(
+        x=data[data.Parameter == parameter].datetime,
+        y=data[data.Parameter == parameter].Reporting_Result,
+        name=parameter,
+        # line_color='grey',
+        # text=data.Site_Name if not data.empty else list(),
+        # hoverinfo='text',
+    ) for parameter in parameters]
+    traces.insert(0, date_line)
+    return go.Figure(data=traces, layout=chart_layout())
+
+
+def chart_layout():
+    return go.Layout(
+        # title=name,
+        yaxis=dict(
+            range=[0, 20000],
         ),
+        margin=dict(t=0),
     )
 
 
@@ -200,6 +225,7 @@ def update_map(date, parameter):
 
     if date:
         data = DATA[DATA['Date_Collected'] == string_date_to_date(date)]
+        data = ecoli_data(data)
     else:
         data = pd.DataFrame()
 
